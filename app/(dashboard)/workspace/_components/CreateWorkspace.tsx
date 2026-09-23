@@ -27,11 +27,14 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { workspaceSchema } from "@/app/schemas/workspace";
-
+import { workspaceSchema, WorkSpaceSchemaType } from "@/app/schemas/workspace";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { orpc } from "@/lib/orpc";
+import { toast } from "sonner";
 
 export function CreateWorkspace() {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof workspaceSchema>>({
     resolver: zodResolver(workspaceSchema),
@@ -40,8 +43,26 @@ export function CreateWorkspace() {
     },
   });
 
-  function onSubmit() {
-    console.log("data");
+  const createWorkspaceMutation = useMutation(
+    orpc.workspace.create.mutationOptions({
+      onSuccess: (newWorkspace) => {
+        toast.success(
+          `Workspace ${newWorkspace.workspaceName} created successfully.`,
+        );
+        queryClient.invalidateQueries({
+          queryKey: orpc.workspace.list.queryKey(),
+        });
+        form.reset();
+        setOpen(false);
+      },
+      onError: () => {
+        toast.error(`Failed to create workspace, try again!`);
+      },
+    }),
+  );
+
+  function onSubmit(values: WorkSpaceSchemaType) {
+    createWorkspaceMutation.mutate(values);
   }
 
   return (
@@ -102,8 +123,14 @@ export function CreateWorkspace() {
             </FieldGroup>
           </form>
           <DialogFooter>
-            <Button type="submit" form="form-create-workspace">
-              Create workspace
+            <Button
+              disabled={createWorkspaceMutation.isPending}
+              type="submit"
+              form="form-create-workspace"
+            >
+              {createWorkspaceMutation.isPending
+                ? "Creating..."
+                : "Create workspace"}
             </Button>
           </DialogFooter>
         </DialogContent>
